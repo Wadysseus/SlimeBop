@@ -1,0 +1,24 @@
+{
+  "name": "slimebop",
+  "version": "1.0.0",
+  "description": "Phaser Platformer",
+  "main": "server.js",
+  "dependencies": {
+    "body-parser": "^1.15.2",
+    "colors": "^1.1.2",
+    "express": "^4.14.0",
+    "morgan": "^1.7.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [
+    "platformer",
+    "learning",
+    "phaser"
+  ],
+  "author": "theIronDingo",
+  "license": "ISC"
+}
