@@ -1,82 +1,85 @@
-(function (Phaser) {
+var game = new Phaser.Game(1080, 720, Phaser.AUTO, '', {    
+        preload: preload, 
+        create: create, 
+        update: update 
+});
 
-    var game = new Phaser.Game(1080, 720, Phaser.AUTO, 'phaser',
-            {
-                preload: preload, 
-                create: create, 
-                update: update   
-            }
-    ); 
+var cursors;
+var facing = "left";
+var currentGoo = 4;
+var maxGoo = 4; 
 
-    function preload() {
-        //Loading player sprite
-        game.load.spritesheet('character', 'assets/slimeSheet.png', 32, 32);
 
-        //Loading background and tiles
-        game.load.tilemap('map', 'assets/map.json', null, Phaser.Tilemap.TILED_JSON);
-        game.load.image('level', 'assets/level.png');
+function preload() {
+    //Loading player sprite
+    game.load.spritesheet('player', 'assets/slimeSheet.png', 32, 32);
+    game.load.image('gooHeart', 'assets/gooHeart.gif');
 
-        //Loading music and sounds
-        game.load.audio('jump', ['./assets/jump.mp3', './assets/jump.ogg']);
-        game.load.audio('music', ['./assets/music.wav', './assets/music.mp3', './assets/music.ogg']);
-    }
+    //Loading music and sfx
+    game.load.audio('jump', ['assets/jump.mp3', 'assets/jump.ogg']);
+    game.load.audio('music', ['assets/music.wav', 'assets/music.mp3', 'assets/music.ogg']);
+    
+    //Loading other sprites, tiles, bgs
+    game.load.image('brick', 'assets/brick.png');
+    game.load.spritesheet('grundle', 'assets/grundle.png');
+}
 
-    var player; // The player-controller sprite
-    var facing = "left"; // Which direction the character is facing (default is 'left')
-    var hozMove = 115; // The amount to move horizontally
-    var vertMove = -170; // The amount to move vertically (when 'jumping')
-    var jumpTimer = 0; // The initial value of the timer
+function create() {
+    game.stage.backgroundColor = "#4488AA";
+    game.physics.startSystem(Phaser.Physics.ARCADE);
+    
+    //music
+    music = game.add.audio('music');
+    music.play('', 0, .69, true);
 
-    //Start Part 2
-    var map;
-    var layer;
+    //player
+    players = game.add.group();
+    players.enableBody = true;
+    createPlayer(10, 10, -180, 115);
 
-    function create() {
-        game.stage.backgroundColor = '#D3D3D3';
-        game.physics.startSystem(Phaser.Physics.ARCADE);
+    //floor
+    platforms = game.add.group();
+    platforms.enableBody = true;
+    createPlatform();
+    
+    //mobs
+    mobs = game.add.group();
+    mobs.enableBody = true;
+    createMob(400, 10, 'grundle');
 
-        //Music
-        music = game.add.audio('music');
-        music.play('',0,.69,true);        
+    cursors = game.input.keyboard.createCursorKeys();
+    game.input.onDown.add(go_fullscreen, this);
 
-        //Map and tiles
-        map = game.add.tilemap('map'); // 'map' needs to match the Tilemap cache-key
-        map.addTilesetImage('level'); // 'map' needs to match the Image cache-key
-        map.setCollisionBetween(1, 5);
-        layer = map.createLayer('Tile Layer 1');
-        layer.resizeWorld();
+    //Life
+    gooHearts = game.add.group();
+    trackGoo();    
+}
 
-        // Create and add a sprite to the game at the position (2*48 x 6 *48)
-        // I think he did the multiplications by the dimensions of the sprite
-        player = game.add.sprite(7 * 64, 13 * 64, 'character');
+function update() {
+    playerUpdate();
+    // mobWander();
+}
 
-        game.physics.enable(player);
+function createPlayer(x,y,j,v){
+    var player = players.create(x,y, 'player');
+    player.body.bounce.y = 0.2;
+    player.body.gravity.y = 102;
+    player.body.collideWorldBounds = true;
 
-        // Set the amount of gravity to apply to the physics body of the 'player' sprite
-        player.body.gravity.y = 102;
-        player.body.bounce.y = 0.1;
+    player.jump = j;
+    player.v = v;
+}
 
-        // Set the camera to follow the 'player'
-        game.camera.follow(player);
-
-        //Fullscreen on click
-        game.input.onDown.add(go_fullscreen, this);
-    }
-
-    function update() {
-
-    	//Collisions
-    	game.physics.arcade.collide(player, layer);
-
-        // Reset the x (horizontal) velocity
-        player.body.velocity.x = 0;
-
-        // Check if the left arrow key is being pressed
-        if (game.input.keyboard.isDown(Phaser.Keyboard.LEFT))
-        {
-            // Set the 'player' sprite's x velocity to a negative number:
-            //  have it move left on the screen.
-            player.body.velocity.x = -hozMove;
+function playerUpdate(){
+    game.physics.arcade.collide(players, players);
+    game.physics.arcade.collide(players, platforms);
+    game.physics.arcade.collide(players, mobs);
+    game.physics.arcade.collide(platforms, mobs);
+    //Keep it as 'players' for multiplayer functionality
+    players.forEach(function(p){
+        p.body.velocity.x = 0;
+        if(cursors.left.isDown){
+            p.body.velocity.x = -p.v;
 
             // Check if 'facing' is not "left"
             if (facing !== "left")
@@ -84,13 +87,8 @@
                 // Set 'facing' to "left"
                 facing = "left";
             }
-        }
-        // Check if the right arrow key is being pressed
-        else if (game.input.keyboard.isDown(Phaser.Keyboard.RIGHT))
-        {
-            // Set the 'player' sprite's x velocity to a positive number:
-            //  have it move right on the screen.
-            player.body.velocity.x = hozMove;
+        } else if(cursors.right.isDown){
+            p.body.velocity.x = p.v;
 
             // Check if 'facing' is not "right"
             if (facing !== "right")
@@ -100,41 +98,64 @@
             }
         }
 
-        // Check if the jumpButton (SPACEBAR) is down AND
-        //  if the 'player' physics body is onFloor (touching a tile) AND
-        //  if the current game.time is greater than the value of 'jumpTimer'
-        //  (Here, we need to make sure the player cannot jump while alreay in the air
-        //   AND that jumping takes place while the sprite is colliding with
-        //   a tile in order to jump off it.)
-        if (game.input.keyboard.isDown(Phaser.Keyboard.SPACEBAR) && player.body.onFloor() && game.time.now > jumpTimer)
-        {
-            // Set the 'player' sprite's y velocity to a negative number
-            //  (vertMove is -90) and thus have it move up on the screen.
+        //jump controls
+        if(cursors.up.isDown && p.body.touching.down){
             var snd = game.add.audio('jump');
             snd.play();
-            player.body.velocity.y = vertMove;
-            // Add 650 and the current time together and set that value to 'jumpTimer'
-            // (The 'jumpTimer' is how long in milliseconds between jumps.
-            //   Here, that is 650 ms.)
-            jumpTimer = game.time.now + 650;
+            p.body.velocity.y = p.jump;
         }
+    });
+}
 
-        // Check if 'facing' is "left"
-        if (facing === "left") {
-            // Set the 'player' to the second (1) frame
-            //  ('facing' is "left")
-            player.frame = 1;
-        } else {
-            // Set the 'player' to the first (0) frame
-            //  ('facing' is "right").
-            player.frame = 0;
-        }
-
+function createPlatform(x,y){
+    for (var i = 0;i < game.world.width;i+=64){
+        var ground = platforms.create(i, game.world.height - 64, 'brick');
+        ground.body.immovable = true;
     }
+    
+}
+
+function createMob(x, y, mob){
+    var mob = mobs.create(x,y, mob);
+    mob.body.bounce.y = 0.1;
+    mob.body.gravity.y = 102;
+    mob.body.collideWorldBounds = true;
+    mob.j = -88;
+    mob.v = 95;    
+    // if (mob === 'grundle'){
+    //     j = -88;
+    //     v = 95;
+    // }
+}
 
 function go_fullscreen(){
     game.scale.fullScreenScaleMode = Phaser.ScaleManager.SHOW_ALL;
     game.scale.startFullScreen();
 }
 
-}(Phaser));
+function trackGoo(x,y){
+    var heartWidth = 44;
+    for (var i = 5;i < 5 + (heartWidth * currentGoo);i+=heartWidth){
+        var life = gooHearts.create(i, 5, 'gooHeart');
+    }
+}
+
+// function mobWander(){
+//     var i = 0;
+
+//     mobs.forEach(mobMove());
+// };
+
+// function mobMove(){
+//     setInterval(function(mob){
+//         mob.body.velocity.x = 0;
+//         i++;
+//         if (i % 2 == 0){
+//             mob.body.velocity.x = -mob.v;
+//         } else if (i % 3 == 0){
+//             mob.body.velocity.x = mob.v;
+//         } else if (i % 5 == 0){
+//             mob.body.velocity.y = mob.j;
+//         }
+//     }, 2000)
+// }

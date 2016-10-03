@@ -19,7 +19,7 @@ app.listen(port, (err)=>{
 	if(err){
 		console.log("There's errors, yo:", err)
 	} else {
-		console.log('Lemme show you my: '.cyan + port);
+		console.log('Lemme show you my: '.cyan + port + ' skeelz.'.cyan);
 	}
 });
 
